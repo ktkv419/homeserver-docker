@@ -1,0 +1,239 @@
+version: "3.8"
+services:
+  qbittorrent:
+    image: linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - TZ=${TZ}
+      - WEBUI_PORT=8068
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+    volumes:
+      - ./qbittorrent:/config
+      - ${MEDIA}:/downloads
+    ports:
+      - 6881:6881
+      - 8068:8068
+    networks:
+      - homeserver
+    restart: always
+
+  speedtest:
+    container_name: speedtest
+    image: henrywhitaker3/speedtest-tracker:dev
+    ports:
+      - 8765:80
+    volumes:
+      - ./speedtest:/config
+    environment:
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+      - OOKLA_EULA_GDPR=true
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "200k"
+    networks:
+      - homeserver
+    restart: always             
+
+  sonarr:
+    image: linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - TZ=${TZ}
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+    volumes:
+      - ./sonarr:/config
+      - ${MEDIA}:/downloads
+    ports:
+      - 8989:8989
+    networks:
+      - homeserver
+    restart: always
+
+  radarr:
+    image: linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - TZ=${TZ}
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+    volumes:
+      - ./radarr:/config
+      - ${MEDIA}:/downloads
+    ports:
+      - 7878:7878
+    networks:
+      - homeserver
+    restart: always
+
+  prowlarr:
+    image: linuxserver/prowlarr:nightly
+    container_name: prowlarr
+    environment:
+      - TZ=${TZ}
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+    volumes:
+      - ./prowlarr:/config
+    ports:
+      - 9696:9696
+    networks:
+      - homeserver
+    restart: always
+
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    environment:
+      - TZ=${TZ}
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+    volumes:
+      - ./jackett:/config
+    ports:
+      - 9117:9117
+    networks:
+      - homeserver
+    restart: always
+
+  jellyfin:
+    # image: lscr.io/linuxserver/jellyfin:latest
+    image: jellyfin/jellyfin:latest
+    user: 1000:1000
+    container_name: jellyfin
+    environment:
+      # for lsio image
+      # - PUID=${UPUID}
+      # - PGID=${UPGID}
+      - TZ=${TZ}
+      # For Nvidia hardware transcoding
+      # - NVIDIA_VISIBLE_DEVICES=all
+      # - NVIDIA_DRIVER_CAPABILITIES=all
+    # deploy:
+    #  resources:
+    #    reservations:
+    #      devices:
+    #        - capabilities: [gpu]
+    volumes:
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
+      - ${MEDIA}/Content:/media
+    ports:
+      - 8096:8096
+    networks:
+      - homeserver
+    restart: always
+
+  nextcloud:
+    image: lscr.io/linuxserver/nextcloud:latest
+    container_name: nextcloud
+    environment:
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+    volumes:
+      - ./nextcloud/config:/config
+      - ${MEDIA}/Nextcloud:/data
+    ports:
+      - 8583:443
+    networks:
+      - homeserver
+    restart: always
+
+  swag:
+    container_name: swag
+    image: linuxserver/swag:latest
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+      - URL=${DOMAIN}
+      - VALIDATION=dns
+      - SUBDOMAINS=${SUBDOMAINS}
+      - DNSPLUGIN=cloudflare
+      - PROPAGATION=20
+      - EMAIL=${EMAIL}
+      - ONLY_SUBDOMAINS=false
+      - STAGING=false
+    ports:
+      - 443:443
+      - 80:80
+    volumes:
+      - ./swag:/config
+    networks:
+      - homeserver
+    restart: always
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - homeserver
+
+  nextcloud-db:
+    container_name: nextcloud-db
+    image: mariadb:latest
+    environment:
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+      - MARIADB_USER=${USERNAME}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_DATABASE=nextcloud
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+    volumes:
+      - ./nextcloud-db:/var/lib/mysql
+    networks:
+      - homeserver
+    restart: always
+      
+  netdata:
+    container_name: netdata
+    image: netdata/netdata:latest
+    environment:
+      - NETDATA_CLAIM_TOKEN=${NETDATA_CLAIM_TOKEN}
+      - NETDATA_CLAIM_URL=https://app.netdata.cloud
+      - NETDATA_CLAIM_ROOMS=
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    ports:
+      - 19999:19999
+    volumes:
+      - ./netdata:/etc/netdata
+    networks:
+      - homeserver
+    restart: always
+
+  # FOR DYNAMIC IP
+  # cloudflare-ddns:
+  #   image: oznu/cloudflare-ddns:latest
+  #   container_name: cloudflare-ddns
+  #   networks:
+  #     - homeserver
+  #   restart: always
+  #   environment:
+  #     - API_KEY=${CLOUDFLARE_API_KEY}
+  #     - ZONE=${DOMAIN}
+  #     - PROXIED=true
+  #     - TZ=${TZ}
+  #     - PUID=${UPUID}
+  #     - PGID=${UPGID}
+
+networks:
+  homeserver:
+    external: true
