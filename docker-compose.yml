@@ -162,9 +162,11 @@ services:
       - EMAIL=${EMAIL}
       - ONLY_SUBDOMAINS=false
       - STAGING=false
+      - DOCKER_MODS=${SWAG_MODS}
     ports:
       - 443:443
       - 80:80
+      - 81:81
     volumes:
       - ./swag:/config
     networks:
@@ -188,9 +190,9 @@ services:
       - PGID=${UPGID}
       - TZ=${TZ}
       - MARIADB_USER=${USERNAME}
-      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MARIADB_PASSWORD=${NEXTCLOUDDB_PASSWORD}
       - MARIADB_DATABASE=nextcloud
-      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${NEXTCLOUDDB_ROOT_PASSWORD}
     volumes:
       - ./nextcloud-db:/var/lib/mysql
     networks:
@@ -200,6 +202,7 @@ services:
   netdata:
     container_name: netdata
     image: netdata/netdata:latest
+    hostname: ${NETDATA_NODE_NAME}
     environment:
       - NETDATA_CLAIM_TOKEN=${NETDATA_CLAIM_TOKEN}
       - NETDATA_CLAIM_URL=https://app.netdata.cloud
@@ -219,7 +222,8 @@ services:
       - homeserver
     restart: always
 
-  # FOR DYNAMIC IP
+  ### FOR DYNAMIC IP
+  #
   # cloudflare-ddns:
   #   image: oznu/cloudflare-ddns:latest
   #   container_name: cloudflare-ddns
@@ -233,6 +237,71 @@ services:
   #     - TZ=${TZ}
   #     - PUID=${UPUID}
   #     - PGID=${UPGID}
+  
+  vaultwarden:
+    container_name: vaultwarden
+    image: vaultwarden/server:latest
+    environment:
+      - "WEBSOCKET_ENABLED=true"  # Enable WebSocket notifications.
+      - "DATABASE_URL=mysql://${USERNAME}:${VAULTWARDENDB_PASSWORD}@vaultwarden-db/vaultwarden"
+      - "ADMIN_TOKEN=${VAULTWARDEN_TOKEN}"
+      - "RUST_BACKTRACE=1"
+      - "DOMAIN=https://vaultwarden.${DOMAIN}"
+      - "SIGNUPS_ALLOWED=false"
+      - "user=${UPUID}:${UPGID}"
+    volumes:
+      - ./vw-data:/data
+    networks:
+      - homeserver
+    restart: always
+
+  vaultwarden-db:
+    container_name: vaultwarden-db
+    image: mariadb:latest
+    environment:
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+      - MARIADB_USER=${USERNAME}
+      - MARIADB_PASSWORD=${VAULTWARDENDB_PASSWORD}
+      - MARIADB_DATABASE=vaultwarden
+      - MARIADB_ROOT_PASSWORD=${VAULTWARDENDB_ROOT_PASSWORD}
+    volumes:
+      - ./vaultwarden-db:/var/lib/mysql
+    networks:
+      - homeserver
+    restart: always
+
+  ### Book Downloader
+  #
+  # openbooks:
+  #   container_name: openbooks
+  #   image: evanbuss/openbooks:latest
+  #   command: --name ${USERNAME} --persist --tls=false -s irc.irchighway.net:6660
+  #   volumes:
+  #     - ${MEDIA}/Content/Books:/openbooks/
+  #   networks:
+  #     - homeserver
+  #   restart: always
+  #   ports:
+  #     - 8081:80
+
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    environment:
+      - PUID=${UPUID}
+      - PGID=${UPGID}
+      - TZ=${TZ}
+    volumes:
+      - /readarr:/config
+      - ${MEDIA}/Content/Books:/books
+      # - /path/to/downloadclient-downloads:/downloads #optional
+    ports:
+      - 8787:8787
+    networks:
+      - homeserver
+    restart: always
 
 networks:
   homeserver:
